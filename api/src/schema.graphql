@@ -1,0 +1,41 @@
+type Genre {
+  genre_id: ID!
+  name: String
+  wikipedia: String
+}
+
+type Band {
+  band_id: ID!
+  name: String
+  allmusic: String
+  wikipedia: String
+}
+
+type Person {
+  person_id: ID!
+  name: String
+  bands_member: [Band] @relation(name: "MEMBER_OF", direction: "OUT")
+  allmusic: String
+  wikipedia: String
+}
+
+type Album {
+  album_id: ID!
+  name: String
+  band: [Band] @relation(name: "BY_BAND", direction: "OUT")
+  allmusic: String
+  wikipedia: String
+}
+
+type Song {
+  song_id: ID!
+  name: String
+  year: Int
+  genre: [Genre] @relation(name: "IS_GENRE", direction: "OUT")
+  writer: [Person] @relation(name: "WRITTEN_BY", direction: "OUT")
+  original: [Band] @relation(name: "ORIGINAL_ARTIST", direction: "OUT")
+  covered: [Band] @relation(name: "COVERED_ARTIST", direction: "OUT")
+  album: [Album] @relation(name: "ON_ALBUM", direction: "OUT")
+  allmusic: String
+  wikipedia: String
+}

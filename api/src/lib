@@ -1,0 +1,41 @@
+
+type Performance {
+  performance_id: ID!
+  song: [Song] @relation(name: "SONG_PLAYED", direction: "OUT")
+  next: [Performance] @relation(name: "FOLLOWED_BY", direction: "OUT")
+  last: [Performance] @relation(name: "PRECEDED_BY", direction: "IN")
+  gig: [Played_During]
+  notes: String
+}
+
+type Played_During @relation(name: "PLAYED_DURING") {
+  from: Peformance
+  to: Gig
+  set: String
+  position_set: Int
+  position_gig: Int
+}
+
+type Series {
+  series_id: ID!
+  name: String
+}
+
+type Gig {
+  gig_id: ID!
+  location: Point
+  date: Date
+  time_start: Time
+  time_end: Time
+  series: [Series] @relation(name: "IN_SERIES", direction: "OUT")
+  number: Int
+  title: String
+  notes: String
+}
+
+type Media {
+  media_id: ID!
+  type: String
+  file: String
+}
+
