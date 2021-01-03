@@ -8,7 +8,8 @@ node_modules/
 
 # production
 build/
-data/
+data/archive/
+data/*.bat
 
 # misc
 .DS_Store
