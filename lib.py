@@ -167,10 +167,6 @@ def generate_bar(data, idx, x, y, color="", style={}, config={}):
     # --------------------------------------------------------------------------
     return chart
 
-
-
-
-
 # ==================================================================================================
 # FUNCTIONS FOR RETRIEVING/BUILDING GENERAL AND SPECIFIC DATA FRAMES
 # ==================================================================================================
@@ -259,6 +255,17 @@ def get_data_songs(data):
     sdata = sdata.merge(numtimes, how='left', on=['Song','Artist'])
 
     # --------------------------------------------------------------------------
+    # Flag as a holt original
+    # --------------------------------------------------------------------------
+    sdata['CH Original'] = sdata['Artist']
+    sdata['CH Original'] = sdata['CH Original'].apply(band_is_original, args=([data['Bands']]))
+
+    sdata = sdata[sdata['CH Original'] == 'No']
+
+    print(sdata['Year'].mean())
+    print(sdata['Year'].median())
+
+    # --------------------------------------------------------------------------
     # Finish
     # --------------------------------------------------------------------------
     return sdata
@@ -271,7 +278,7 @@ def get_data_albums(data):
     # --------------------------------------------------------------------------
     # Start with the Albums
     # --------------------------------------------------------------------------
-    sdata = data['Albums'][['Name','Band','Personnel']].reset_index(drop=True)
+    sdata = data['Albums'][['Name','Band','Year']].reset_index(drop=True)
     sdata = sdata.rename(columns={'Name':'Album','Band':'Artist'})
 
     # --------------------------------------------------------------------------
@@ -284,6 +291,7 @@ def get_data_albums(data):
 
     # --------------------------------------------------------------------------
     # TODO Fields for total # of songs and # of songs played
+    # ...that would give us a % of the album that is 'complete'.
     # --------------------------------------------------------------------------
 
     # --------------------------------------------------------------------------
@@ -716,3 +724,39 @@ def make_splash_page(app, image, blurbs):
 ###    # Finish (no call should reach this far, but just to be complete
 ###    # --------------------------------------------------------------------------
 ###    return False
+
+# ------------------------------------------------------------------------------
+# Get the existing marked-up data, no frills
+# ------------------------------------------------------------------------------
+def get_marked_data(data_fname):
+    # --------------------------------------------------------------------------
+    # Start
+    # --------------------------------------------------------------------------
+    print("...reading data from file " + data_fname + "...")
+
+    # --------------------------------------------------------------------------
+    # Get the whole mess at once
+    # --------------------------------------------------------------------------
+    existing_data = pd.read_excel(data_fname, sheet_name=None, usecols = lambda x: 'Unnamed' not in x,)
+
+    # --------------------------------------------------------------------------
+    # Set up the index for each
+    # --------------------------------------------------------------------------
+    existing_data['People']       = existing_data['People'].set_index('Name', drop=False).dropna(how='all')
+    existing_data['Instruments']  = existing_data['Instruments'].set_index('Name', drop=False).dropna(how='all')
+    existing_data['Genres']       = existing_data['Genres'].set_index('Name', drop=False).dropna(how='all')
+    existing_data['Bands']        = existing_data['Bands'].set_index('Name', drop=False).dropna(how='all')
+    existing_data['Albums']       = existing_data['Albums'].set_index(['Name','Band'], drop=False).dropna(how='all')
+    existing_data['Songs']        = existing_data['Songs'].set_index(['Name','Band'], drop=False).dropna(how='all')
+    existing_data['Places']       = existing_data['Places'].set_index('Name', drop=False).dropna(how='all')
+    existing_data['Series']       = existing_data['Series'].set_index('Name', drop=False).dropna(how='all')
+    existing_data['Gigs']         = existing_data['Gigs'].set_index(['Series','Series Index'], drop=False).dropna(how='all')
+    existing_data['Performances'] = existing_data['Performances'].set_index(['Series','Series Index','Set','Set Position'], drop=False).dropna(how='all')
+    existing_data['Image']        = existing_data['Image'].set_index('File Name', drop=False).dropna(how='all')
+    existing_data['Audio']        = existing_data['Audio'].set_index('File Name', drop=False).dropna(how='all')
+    existing_data['Video']        = existing_data['Video'].set_index('File Name', drop=False).dropna(how='all')
+
+    # --------------------------------------------------------------------------
+    # Finish
+    # --------------------------------------------------------------------------
+    return existing_data

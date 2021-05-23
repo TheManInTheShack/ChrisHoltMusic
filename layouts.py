@@ -12,9 +12,6 @@ import dash_html_components as html
 import pandas as pd
 import plotly.express as px
 
-sys.path.append("..\\data")
-from chproc import get_marked_data
-
 from lib import *
 
 from app import app
