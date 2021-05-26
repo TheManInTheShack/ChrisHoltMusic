@@ -112,7 +112,7 @@ blurb_2 = blurb_2.format(str(total_shows), str(total_performances), str(total_so
 blurb_3 = "All by himself, right in front of your eyes, song by song...welcome to the world of All Request Thursdays."
 blurbs = [blurb_1, blurb_2, blurb_3]
 
-data_num_songs_by_artist = get_data_num_songs_by_artist(data, minsongs=5)
+data_num_songs_by_artist = get_data_num_songs_by_artist(data, minsongs=10)
 data_num_songs_by_year   = get_data_num_songs_by_year(data)
 
 chart_num_songs_by_artist = generate_bar(data_num_songs_by_artist, idx="chart_num_songs_by_artist", x="Originating Artist",          y="Number of Songs Played", color="CH Original", style=style_default)
@@ -126,7 +126,7 @@ components.append(get_header(app, title, logo))
 components.append(get_navbar(pages, 'splash'))
 components.append(make_splash_page(app, splash_image, blurbs))
 components.extend(display_simple_table(data_last_setlist, idx="splash_setlist_table", title="Setlist from latest show"))
-components.extend(display_chart(shape="1x1", charts=[chart_num_songs_by_artist], title="Number of Songs by Artist (played at least five songs)"))
+components.extend(display_chart(shape="1x1", charts=[chart_num_songs_by_artist], title="Number of Songs by Artist (played at least ten songs)"))
 components.extend(display_chart(shape="1x1", charts=[chart_num_songs_by_year],   title="Number of Songs by Year of Origination"))
 components.append(get_footnote(footnote))
 
