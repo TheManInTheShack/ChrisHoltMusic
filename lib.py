@@ -425,7 +425,7 @@ def band_is_original(band, band_data):
     # --------------------------------------------------------------------------
     else:
         this_one = band_data['Chris Relationship'].loc[band]
-        if this_one == "Original":
+        if str(this_one).lower() == "original":
             return "Yes"
         else:
             return "No"
