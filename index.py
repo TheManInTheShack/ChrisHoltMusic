@@ -49,10 +49,10 @@ init_dict['pages'] = pages
 # ------------------------------------------------------------------------------
 # Single-level layout holds the whole page
 # ------------------------------------------------------------------------------
-app.layout = html.Div([
+app.layout = dbc.Container([
     dcc.Location(id='url', refresh=False),
     html.Div(id='page-content')
-])
+], fluid=True)
 
 # ------------------------------------------------------------------------------
 # Path routing via a special callback

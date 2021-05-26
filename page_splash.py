@@ -144,12 +144,19 @@ def layout_splash(init_dict):
     # ------------------------------------------------------------------------------
     components = []
     components.append(get_navbar(pages, title))
+
     components.append(splash_blob)
+
     components.extend(display_simple_table(data_last_setlist, idx="splash_setlist_table", title="Setlist from latest show"))
+
+    components.append(html.Br())
     components.append(html.H2("Number of Songs by Artist (at least ten songs played)", style=style_default))
     components.append(charts_with_controls(charts_1, controls_1, layout_1))
+
+    components.append(html.Br())
     components.append(html.H2("Number of Songs by Year of Origination", style=style_default))
     components.append(charts_with_controls(charts_2, controls_2, layout_2))
+
     components.append(get_footnote(footnote))
 
     # ------------------------------------------------------------------------------
