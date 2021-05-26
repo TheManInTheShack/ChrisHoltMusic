@@ -1,15 +1,23 @@
+# ==================================================================================================
+# FUNCTIONS FOR GENERATING AND DISPLAYING TABLES
+# THESE ARE GENERIC ACROSS PROJECTS
+# ==================================================================================================
 
 # ==================================================================================================
 # Imports
 # ==================================================================================================
+import sys
 import pandas as pd
 import plotly.express as px
+
 import dash
 import dash_table
 import dash_core_components as dcc
 import dash_html_components as html
 import dash_bootstrap_components as dbc
 from dash.dependencies import Output, Input
+
+from datetime import datetime, timedelta
 
 # ==================================================================================================
 # FUNCTIONS FOR GENERATING AND DISPLAYING TABLES
@@ -46,7 +54,7 @@ def generate_simple_table(data, idx, max_rows=50):
 def display_simple_table(df, idx="", title=""):
     components = []
 
-    components.append(get_emptyrow())
+    components.append(get_empty_row())
     components.append(html.H3(title))
     components.append(generate_simple_table(df, idx))
 
@@ -94,59 +102,274 @@ def generate_data_table(df, idx, height='500px'):
 def display_data_table(df, idx="", title="", height="500px"):
     components = []
 
-    components.append(get_emptyrow())
+    components.append(get_empty_row())
     components.append(html.H3(title))
     components.append(generate_data_table(df, idx, height))
 
     return components
 
 # ==================================================================================================
-# FUNCTIONS FOR GENERATING AND DISPLAYING CHARTS
+# Chart-related functions
 # ==================================================================================================
 
 # ------------------------------------------------------------------------------
-# Display one or more charts on the page as rows
+# Complete chart system with controls
 # ------------------------------------------------------------------------------
-def display_chart(shape, charts, title):
+def charts_with_controls(charts, controls, layout):
     # --------------------------------------------------------------------------
-    # Depending on the shape this will happen differently
-    # Start with the simple single chart
+    # 
     # --------------------------------------------------------------------------
-    if shape=="1x1":
-        # ----------------------------------------------------------------------
-        # Make it a row with a margin of 1/12
-        # ----------------------------------------------------------------------
-        row_components = []
-        row_components.append(get_empty_col())
-        row_components.append(html.Div(charts[0], className = 'col-10'))
-        row_components.append(get_empty_col())
+    #print(controls)
+    #print(data)
+    # --------------------------------------------------------------------------
+    # Create the chart objects
+    # --------------------------------------------------------------------------
+    for chart in charts:
+        thischart = charts[chart]
+        details   = charts[chart]['details']
+        if thischart['chart_type'] == 'bar':
+            if 'color' in details:
+                figure = generate_bar(data=details['data'],x=details['x'],y=details['y'],style=details['style'],color=details['color'])
+            else:
+                figure = generate_bar(data=details['data'],x=details['x'],y=details['y'],style=details['style'])
 
-        row = html.Div(row_components, className = 'row')
+        if thischart['chart_type'] == 'line':
+            figure = generate_line(details['data'],details['x'],details['y'],style=details['style'])
+        charts[chart]['figure'] = dcc.Graph(id=charts[chart]['idx'],figure=figure)
+    
+    # --------------------------------------------------------------------------
+    # Create the matrix for the chart based on the shape input
+    # --------------------------------------------------------------------------
+    chart_shape = shape_matrixify(layout['chart_shape'])
+    # --------------------------------------------------------------------------
+    # Place into the appropriate shape
+    # --------------------------------------------------------------------------
+    row = -1
+    numcols = len(chart_shape[0])
+    for col,chart in enumerate(charts):
+        # ----------------------------------------------------------------------
+        # Figure out what column we should be in
+        # ----------------------------------------------------------------------
+        thiscol = col % numcols
+        # ----------------------------------------------------------------------
+        # Increment row if we're at the beginning of row
+        # ----------------------------------------------------------------------
+        if thiscol == 0:
+            row += 1
+        # ----------------------------------------------------------------------
+        # Place the object in
+        # ----------------------------------------------------------------------
+        chart_shape[row][thiscol] = charts[chart]['figure']
+        
+    # --------------------------------------------------------------------------
+    # Compile the components
+    # --------------------------------------------------------------------------
+    chart_components = []
+    for row in chart_shape:
+        rowinp = list(map(create_div_col,row))
+        thisrow = []
+        thisrow.append(get_empty_col())
+        thisrow.append(html.Div(dbc.Row(rowinp),className='col-10'))
+        thisrow.append(get_empty_col())
+        chart_components.append(html.Div(thisrow, className='row'))
+        chart_components.append(get_empty_row())
 
+
+    # --------------------------------------------------------------------------
+    # Create the control objects
+    # --------------------------------------------------------------------------
+    for control in controls:
         # ----------------------------------------------------------------------
-        # Put everything together
+        # Create a drop down
         # ----------------------------------------------------------------------
-        components = []
-        components.append(get_emptyrow())
-        components.append(html.H3(title))
-        components.append(row)
+        if controls[control]['control_type'] == 'dropdown':
+            details = controls[control]['details']
+            controls[control]['obj'] = dcc.Dropdown(id=controls[control]['idx'],options=details['options'],
+                                                    value=details['value'],multi=details['multi'],
+                                                    style=details['style'])
+            continue
+        # ----------------------------------------------------------------------
+        # Button
+        # ----------------------------------------------------------------------
+        if controls[control]['control_type'] == 'button':
+            details = controls[control]['details']
+            controls[control]['obj'] = dbc.Button(details['label'],id=controls[control]['idx'])
+            # controls[control]['obj'] = html.Button(details['label'],id=controls[control]['idx'])
+            continue
+        # ----------------------------------------------------------------------
+        # Add more as they come
+        # ----------------------------------------------------------------------
+        # if controls[control]['control_type'] ==
+
+    # --------------------------------------------------------------------------
+    # Make components list
+    # --------------------------------------------------------------------------
+    control_components = []
+    # --------------------------------------------------------------------------
+    # Go through each control and create a title + dropdown object
+    # --------------------------------------------------------------------------
+    for control in controls:
+        thiscontrolset = []
+        thiscontrolset.append(html.P(controls[control]['details']['title']))
+        thiscontrolset.append(controls[control]['obj'])
+        control_components.append(dbc.Col(html.Div(thiscontrolset)))
+    controlset = [html.Div([get_empty_col(),html.Div(dbc.Row(control_components),className='col-10'),get_empty_col()],className='row')]
+
+    # --------------------------------------------------------------------------
+    # 
+    # --------------------------------------------------------------------------
+    if layout['controls_orient'] == 'top':
+        construct = html.Div(controlset + chart_components, style=layout['style_default'])
+    elif layout['controls_orient'] == 'bottom':
+        construct = html.Div(chart_components + controlset, style=layout['style_default'])
+    else:
+        construct = html.Div(controlset + chart_components, style=layout['style_default'])
 
     # --------------------------------------------------------------------------
     # Finish
     # --------------------------------------------------------------------------
-    return components
+    return construct
+
+# ==================================================================================================
+# Page layout functions
+# ==================================================================================================
+# ------------------------------------------------------------------------------
+# Empty row
+# This returns an empty row of a defined height
+# ------------------------------------------------------------------------------
+def get_empty_row(h='45px'):
+    emptyrow = html.Div([
+        html.Div([
+            html.Br()
+        ], className = 'col-12')
+    ],
+    className = 'row',
+    style = {'height' : h})
+
+    return emptyrow
+# ------------------------------------------------------------------------------
+# Empty column for spacing
+# ------------------------------------------------------------------------------
+def get_empty_col():
+    empty_col = html.Div([], className = 'col-1')
+    return empty_col
 
 # ------------------------------------------------------------------------------
-# Make a bar chart
+# Create a div col object (for charts)
 # ------------------------------------------------------------------------------
-def generate_bar(data, idx, x, y, color="", style={}, config={}):
+def create_div_col(obj=[None]):
+    col = dbc.Col(html.Div(obj))
+    return col
+
+# ------------------------------------------------------------------------------
+# Navbar, using bootstrap
+# ------------------------------------------------------------------------------
+def get_navbar(pages, title):
+    # --------------------------------------------------------------------------
+    # --------------------------------------------------------------------------
+    page_links = []
+    for page in pages:
+        page_links.append(dbc.NavItem(dbc.NavLink(pages[page]['name'], href=pages[page]['href'])))
+
+    # --------------------------------------------------------------------------
+    # --------------------------------------------------------------------------
+    navbar = dbc.NavbarSimple(
+            children=page_links,
+            brand=title,
+            brand_href="/",
+            color="black",
+            dark=True
+        )
+
+    # --------------------------------------------------------------------------
+    # --------------------------------------------------------------------------
+    return navbar
+
+# ==================================================================================================
+# Utility functions for doing data-related stuff
+# ==================================================================================================
+
+def aggregate_df_mean(inpdf,agg_col,metrics):
+    """
+    Take in a dataframe, aggregate by group -> mean
+    """
+    out = inpdf.groupby(agg_col)[metrics].mean()
+    out[agg_col] = out.index.to_list()
+    return out
+
+# ------------------------------------------------------------------------------
+# From a date string, we want to know the month, quarter, and year
+# ------------------------------------------------------------------------------
+def get_date_hierarchy(date):
+    # --------------------------------------------------------------------------
+    # 
+    # --------------------------------------------------------------------------
+    ddate = datetime.strptime(date, '%Y-%m-%d')
+    year  = ddate.year
+    month = ddate.month
+
+    if month <= 3:
+        qnum = 1
+    elif month <= 6:
+        qnum = 2
+    elif month <= 9:
+        qnum = 3
+    elif month <= 12:
+        qnum = 4
+
+    quarter = str(year) + " Q" + str(qnum)
+
+    # --------------------------------------------------------------------------
+    # Finish
+    # --------------------------------------------------------------------------
+    return month, quarter, year
+# ==================================================================================================
+# Creating control objects
+# ==================================================================================================
+
+# ==================================================================================================
+# Creating figures
+# ==================================================================================================
+def generate_line(data, x, y, color="", legend_title=None, style={}, config={}):
+    # --------------------------------------------------------------------------
+    # Initialize the line object
+    # --------------------------------------------------------------------------
+    line = px.line(data,x=x,y=y)
+    # --------------------------------------------------------------------------
+    # Update styling
+    # --------------------------------------------------------------------------
+    if 'backgroundColor' in style:
+        line.update_layout(plot_bgcolor=style['backgroundColor'])
+        line.update_layout(paper_bgcolor=style['backgroundColor'])
+    if 'color' in style:
+        line.update_layout(font_color=style['color'])
+    # --------------------------------------------------------------------------
+    # Update the legend title
+    # --------------------------------------------------------------------------
+    if legend_title is not None:
+        line.update_layout(legend_title_text  = legend_title)
+    return line
+
+def generate_bar(data, x, y, color="", style={}, config={}, barmode='', facet=''):
     # --------------------------------------------------------------------------
     # Make the bar chart figure
     # --------------------------------------------------------------------------
     if color:
-        bar = px.bar(data, x=x, y=y, barmode='group', color=color)
+        bar = px.bar(data, x=x, y=y, color=color)
     else:
-        bar = px.bar(data, x=x, y=y, barmode='group')
+        bar = px.bar(data, x=x, y=y)
+
+    # --------------------------------------------------------------------------
+    # Update mode if needed
+    # --------------------------------------------------------------------------
+    if barmode:
+        bar.update_layout(barmode=barmode)
+
+    # --------------------------------------------------------------------------
+    # Update facet if needed
+    # --------------------------------------------------------------------------
+    #if facet:
+    #    bar.update_layout(facet=facet)
 
     # --------------------------------------------------------------------------
     # Update styling
@@ -158,18 +381,102 @@ def generate_bar(data, idx, x, y, color="", style={}, config={}):
         bar.update_layout(font_color=style['color'])
 
     # --------------------------------------------------------------------------
-    # Make the chart 
+    # Kick out before making the whole chart object if we are refreshing
     # --------------------------------------------------------------------------
-    chart = dcc.Graph(id=idx, figure=bar)
+    return bar
+
+def generate_data_table(df, idx, height='500px'):
+    # --------------------------------------------------------------------------
+    # The table object
+    # --------------------------------------------------------------------------
+    table = dash_table.DataTable(
+            id=idx,
+            data = df.to_dict('records'),
+            columns = [{'id':c, 'name':c} for c in df.columns],
+            filter_action='native',
+            page_action='none',
+            #fixed_rows={'headers':True},    <------TODO WHEN THIS IS ON, THE FILTERS SHOW NOTHING
+            style_cell={'whiteSpace':'normal','height':'auto','textAlign':'left', 'minWidth':'50px', 'maxWidth':'180px'},
+            style_table={'height':height, 'overflowY':'auto' },
+            style_header={'backgroundColor':'Black', 'fontWeight':'bold', 'textAlign':'center' },
+            style_data_conditional=[{'if': {'row_index':'odd'},'backgroundColor':'rgb(0,0,0)'},{'if': {'row_index':'even'},'backgroundColor':'rgb(25,25,25)'}],
+            style_as_list_view=False,
+            sort_action='native',
+            sort_mode='multi'
+            )
+
+    # --------------------------------------------------------------------------
+    # Consolidate
+    # --------------------------------------------------------------------------
+    components = []
+    components.append(get_empty_col())
+    components.append(html.Div(table, className = 'col-10'))
+    components.append(get_empty_col())
 
     # --------------------------------------------------------------------------
     # Finish
     # --------------------------------------------------------------------------
-    return chart
+    return html.Div(components, className = 'row')
 
 # ==================================================================================================
-# FUNCTIONS FOR RETRIEVING/BUILDING GENERAL AND SPECIFIC DATA FRAMES
+# Helper Functions
 # ==================================================================================================
+def shape_matrixify(shape):
+    """
+    Create matrix based on shape description
+    """
+    try:
+        rows = int(shape.lower().split('x')[0])
+        cols = int(shape.lower().split('x')[1])
+        out = [[] for i in range(rows)]
+        for row in out:
+            for i in range(cols):
+                row.append(None)
+        return out
+    except:
+        return [[]]
+
+
+# ==================================================================================================
+# General functions for this project
+# ==================================================================================================
+# ------------------------------------------------------------------------------
+# Get the existing marked-up data, no frills
+# ------------------------------------------------------------------------------
+def get_marked_data(data_fname):
+    # --------------------------------------------------------------------------
+    # Start
+    # --------------------------------------------------------------------------
+    print("...reading data from file " + data_fname + "...")
+
+    # --------------------------------------------------------------------------
+    # Get the whole mess at once
+    # --------------------------------------------------------------------------
+    existing_data = pd.read_excel(data_fname, sheet_name=None, usecols = lambda x: 'Unnamed' not in x,)
+
+    # --------------------------------------------------------------------------
+    # Set up the index for each
+    # --------------------------------------------------------------------------
+    existing_data['People']       = existing_data['People'].set_index('Name', drop=False).dropna(how='all')
+    existing_data['Instruments']  = existing_data['Instruments'].set_index('Name', drop=False).dropna(how='all')
+    existing_data['Genres']       = existing_data['Genres'].set_index('Name', drop=False).dropna(how='all')
+    existing_data['Bands']        = existing_data['Bands'].set_index('Name', drop=False).dropna(how='all')
+    existing_data['Albums']       = existing_data['Albums'].set_index(['Name','Band'], drop=False).dropna(how='all')
+    existing_data['Songs']        = existing_data['Songs'].set_index(['Name','Band'], drop=False).dropna(how='all')
+    existing_data['Places']       = existing_data['Places'].set_index('Name', drop=False).dropna(how='all')
+    existing_data['Series']       = existing_data['Series'].set_index('Name', drop=False).dropna(how='all')
+    existing_data['Gigs']         = existing_data['Gigs'].set_index(['Series','Series Index'], drop=False).dropna(how='all')
+    existing_data['Performances'] = existing_data['Performances'].set_index(['Series','Series Index','Set','Set Position'], drop=False).dropna(how='all')
+    existing_data['Image']        = existing_data['Image'].set_index('File Name', drop=False).dropna(how='all')
+    existing_data['Audio']        = existing_data['Audio'].set_index('File Name', drop=False).dropna(how='all')
+    existing_data['Video']        = existing_data['Video'].set_index('File Name', drop=False).dropna(how='all')
+
+    # --------------------------------------------------------------------------
+    # Finish
+    # --------------------------------------------------------------------------
+    return existing_data
+
+
 
 # ------------------------------------------------------------------------------
 # Prepare the performance-based data
@@ -357,57 +664,37 @@ def get_data_originals(data):
     # --------------------------------------------------------------------------
     return sdata
 
+
+# ==================================================================================================
+# Helper functions for this project
+# ==================================================================================================
+
+
 # ------------------------------------------------------------------------------
-# Get data needed for specific chart
-# Number of different songs played by artist (with minimum)
+# Footnote has the credits and the rev#
 # ------------------------------------------------------------------------------
-def get_data_num_songs_by_artist(data, minsongs=0):
+def get_footnote(footnote):
     # --------------------------------------------------------------------------
-    # Get the whole count
+    # Start
     # --------------------------------------------------------------------------
-    count = data['Songs']['Band'].value_counts(sort=True, ascending=False)
+    components = []
 
     # --------------------------------------------------------------------------
-    # Reset the minimum if requested
+    # Parts
     # --------------------------------------------------------------------------
-    if minsongs > 0:
-        count = count.loc[count >= minsongs]
+    components.append(get_empty_row())
+    components.append(html.P(footnote['credits']))
+    components.append(html.P(footnote['revnum']))
 
     # --------------------------------------------------------------------------
-    # Make the count into a dataframe and label the columns
+    # Consolidate
     # --------------------------------------------------------------------------
-    sdata = pd.DataFrame(list(zip(count.index.tolist(), count.tolist())), columns=["Originating Artist","Number of Songs Played"])
-
-    # --------------------------------------------------------------------------
-    # Add a column to say whether the band is one of Chris's originals
-    # --------------------------------------------------------------------------
-    sdata['CH Original'] = sdata['Originating Artist']
-    sdata['CH Original'] = sdata['CH Original'].apply(band_is_original, args=([data['Bands']]))
+    fnote = html.Div(components, style={'font-size':'small'})
 
     # --------------------------------------------------------------------------
     # Finish
     # --------------------------------------------------------------------------
-    return sdata
-
-# ------------------------------------------------------------------------------
-# Get data needed for specific chart
-# Number of different songs played by year
-# ------------------------------------------------------------------------------
-def get_data_num_songs_by_year(data):
-    # ----------------------------------------------------------------------
-    # Get the whole count
-    # ----------------------------------------------------------------------
-    count = data['Songs']['Year'].value_counts(sort=True, ascending=False)
-
-    # ----------------------------------------------------------------------
-    # Make the count into a dataframe and label the columns
-    # ----------------------------------------------------------------------
-    sdata = pd.DataFrame(list(zip(count.index.tolist(), count.tolist())), columns=["Year of Song's Origination","Number of Songs Played"])
-
-    # --------------------------------------------------------------------------
-    # Finish
-    # --------------------------------------------------------------------------
-    return sdata
+    return fnote
 
 # ------------------------------------------------------------------------------
 # Return Yes/No for whether the band is one of Chris's originals...takes
@@ -430,333 +717,4 @@ def band_is_original(band, band_data):
         else:
             return "No"
 
-# ==================================================================================================
-# BUILD WHOLE-PAGE COMPONENTS - HEADER, NAVIGATION, FOOTNOTE
-# ==================================================================================================
 
-# ------------------------------------------------------------------------------
-# Header with logo
-# ------------------------------------------------------------------------------
-def get_header(app, title, logo):
-    # --------------------------------------------------------------------------
-    # Left is an empty space
-    # --------------------------------------------------------------------------
-    left = html.Div([], className = 'col-2')
-
-    # --------------------------------------------------------------------------
-    # Center is the title
-    # --------------------------------------------------------------------------
-    center = html.Div([
-            html.H1(children=title,
-                    style = {'textAlign' : 'center'}
-            )],
-            className = 'col-8',
-            style = {'padding-top' : '1%'}
-        )
-
-    # --------------------------------------------------------------------------
-    # Right is the logo
-    # --------------------------------------------------------------------------
-    right = html.Div([
-            html.Img(
-                    src = app.get_asset_url(logo),
-                    height = '43 px',
-                    width = 'auto')
-            ],
-            className = 'col-2',
-            style = {
-                    'align-items': 'center',
-                    'padding-top' : '1%',
-                    'height' : 'auto'})
-
-    # --------------------------------------------------------------------------
-    # Final product is all three put together as a single 'row'
-    # --------------------------------------------------------------------------
-    header = html.Div([left, center, right], className = 'row', style = {'height' : '4%'})
-
-    # --------------------------------------------------------------------------
-    # Finish
-    # --------------------------------------------------------------------------
-    return header
-
-
-# ------------------------------------------------------------------------------
-# Nav bar
-# pages['splash']        = {'href':"/"                 , 'name':"Home"         }
-# ------------------------------------------------------------------------------
-def get_navbar(pages, current_page):
-    # --------------------------------------------------------------------------
-    # Start
-    # --------------------------------------------------------------------------
-    components = []
-
-    # --------------------------------------------------------------------------
-    # Special styling for the navbar piece
-    # --------------------------------------------------------------------------
-    navbarcurrentpage = {
-    'text-decoration' : 'underline',
-    'text-shadow': '0px 0px 1px rgb(251, 251, 252)'
-    }
-
-    # --------------------------------------------------------------------------
-    # Left side hsa a blank column
-    # --------------------------------------------------------------------------
-    components.append(html.Div([], className = 'col-2'))
-
-    # --------------------------------------------------------------------------
-    # One item for each page
-    # --------------------------------------------------------------------------
-    for page in pages:
-        # ----------------------------------------------------------------------
-        # Maybe this is the current page, it has extra styling
-        # ----------------------------------------------------------------------
-        if page == current_page:
-            components.append(html.Div([ dcc.Link( html.H4(children = pages[page]['name'], style = navbarcurrentpage), href=pages[page]['href']) ], className = 'col-1'))
-
-        # ----------------------------------------------------------------------
-        # Or maybe it's one of the other pages
-        # ----------------------------------------------------------------------
-        else:
-            components.append(html.Div([ dcc.Link( html.H4(children = pages[page]['name']), href=pages[page]['href']) ], className = 'col-1'))
-
-    # --------------------------------------------------------------------------
-    # Margin on the right with whatever is left over
-    # --------------------------------------------------------------------------
-    right_width = 12-len(pages)-1
-    coltype = 'col-' + str(right_width)
-    components.append(html.Div([], className = coltype))
-
-    # --------------------------------------------------------------------------
-    # Make the whole navbar
-    # --------------------------------------------------------------------------
-    navbar = html.Div(components, className = 'row')
-
-    # --------------------------------------------------------------------------
-    # Finish
-    # --------------------------------------------------------------------------
-    return navbar
-
-# ------------------------------------------------------------------------------
-# Empty row
-# This returns an empty row of a defined height
-# ------------------------------------------------------------------------------
-def get_emptyrow(h='45px'):
-    emptyrow = html.Div([
-        html.Div([
-            html.Br()
-        ], className = 'col-12')
-    ],
-    className = 'row',
-    style = {'height' : h})
-
-    return emptyrow
-
-# ------------------------------------------------------------------------------
-# Empty column
-# ------------------------------------------------------------------------------
-def get_empty_col():
-    empty_col = html.Div([], className = 'col-1')
-    return empty_col
-
-# ------------------------------------------------------------------------------
-# Footnote has the credits and the rev#
-# ------------------------------------------------------------------------------
-def get_footnote(footnote):
-    # --------------------------------------------------------------------------
-    # Start
-    # --------------------------------------------------------------------------
-    components = []
-
-    # --------------------------------------------------------------------------
-    # Parts
-    # --------------------------------------------------------------------------
-    components.append(get_emptyrow())
-    components.append(html.P(footnote['credits']))
-    components.append(html.P(footnote['revnum']))
-
-    # --------------------------------------------------------------------------
-    # Consolidate
-    # --------------------------------------------------------------------------
-    fnote = html.Div(components, style={'font-size':'small'})
-
-    # --------------------------------------------------------------------------
-    # Finish
-    # --------------------------------------------------------------------------
-    return fnote
-
-# ==================================================================================================
-# BUILD OTHER SPECIFIC BUT COMPLEX PIECES
-# ==================================================================================================
-
-# ------------------------------------------------------------------------------
-# Splash page
-# ------------------------------------------------------------------------------
-def make_splash_page(app, image, blurbs):
-    # --------------------------------------------------------------------------
-    # Start
-    # --------------------------------------------------------------------------
-    components = []
-    row = []
-
-    # --------------------------------------------------------------------------
-    # Make an empty column to use in the layout
-    # --------------------------------------------------------------------------
-    empty_col = html.Div([], className = 'col-1')
-
-    # --------------------------------------------------------------------------
-    # Get the image
-    # --------------------------------------------------------------------------
-    image = html.Div([ html.Img( src = app.get_asset_url(image)) ],
-            className = 'col-5',
-            style = { 'align-items': 'center', 'padding-top' : '1%'})
-
-    # --------------------------------------------------------------------------
-    # Parts
-    # --------------------------------------------------------------------------
-    blob = []
-    for blurb in blurbs:
-        blob.append(html.P(blurb))
-
-    text_block = html.Div(blob, className = 'col-5')
-
-
-    # --------------------------------------------------------------------------
-    # Consolidate
-    # --------------------------------------------------------------------------
-    row = html.Div([empty_col, image, text_block, empty_col], className = 'row')
-
-    splash = html.Div([get_emptyrow(), row])
-
-    # --------------------------------------------------------------------------
-    # Finish
-    # --------------------------------------------------------------------------
-    return splash
-
-
-# ==================================================================================================
-# OBSELETE
-# ==================================================================================================
-# ------------------------------------------------------------------------------
-#### Function to produce charts from the data
-#### ------------------------------------------------------------------------------
-###def get_chart(data, selection, config = {}):
-###    # --------------------------------------------------------------------------
-###    # Number of different songs played by artist (with minimum)
-###    # --------------------------------------------------------------------------
-###    if selection=="number_of_songs_by_artist":
-###        # ----------------------------------------------------------------------
-###        # Get the whole count
-###        # ----------------------------------------------------------------------
-###        count = data['Songs']['Band'].value_counts(sort=True, ascending=False)
-###
-###        # ----------------------------------------------------------------------
-###        # Reset the minimum if requested
-###        # ----------------------------------------------------------------------
-###        if 'min' in config:
-###            count = count.loc[count >= config['min']]
-###
-###        # ----------------------------------------------------------------------
-###        # Make the count into a dataframe and label the columns
-###        # ----------------------------------------------------------------------
-###        df = pd.DataFrame(list(zip(count.index.tolist(), count.tolist())), columns=["Originating Artist","Number of Songs Played"])
-###
-###        # ----------------------------------------------------------------------
-###        # Add a column to say whether the band is one of Chris's originals
-###        # ----------------------------------------------------------------------
-###        df['CH Original'] = df['Originating Artist']
-###        df['CH Original'] = df['CH Original'].apply(band_is_original, args=([data['Bands']]))
-###
-###        # ----------------------------------------------------------------------
-###        # Make it into a bar chart
-###        # ----------------------------------------------------------------------
-###        bar = px.bar(df, x='Originating Artist', y='Number of Songs Played', color='CH Original', barmode='group')
-###
-###        # ----------------------------------------------------------------------
-###        # Update the design based on the config
-###        # ----------------------------------------------------------------------
-###        if 'style' in config: 
-###            if 'backgroundColor' in config['style']:
-###                bar.update_layout(plot_bgcolor=config['style']['backgroundColor'])
-###                bar.update_layout(paper_bgcolor=config['style']['backgroundColor'])
-###            if 'color' in config['style']:
-###                bar.update_layout(font_color=config['style']['color'])
-###
-###        # ----------------------------------------------------------------------
-###        # Send back the chart
-###        # ----------------------------------------------------------------------
-###        return bar
-###
-###    # --------------------------------------------------------------------------
-###    # Number of different songs played by year
-###    # --------------------------------------------------------------------------
-###    if selection=="number_of_songs_by_year":
-###        # ----------------------------------------------------------------------
-###        # Get the whole count
-###        # ----------------------------------------------------------------------
-###        count = data['Songs']['Year'].value_counts(sort=True, ascending=False)
-###
-###        # ----------------------------------------------------------------------
-###        # Make the count into a dataframe and label the columns
-###        # ----------------------------------------------------------------------
-###        df = pd.DataFrame(list(zip(count.index.tolist(), count.tolist())), columns=["Year of Song's Origination","Number of Songs Played"])
-###
-###        # ----------------------------------------------------------------------
-###        # Make it into a bar chart
-###        # ----------------------------------------------------------------------
-###        bar = px.bar(df, x="Year of Song's Origination", y="Number of Songs Played", barmode='group')
-###
-###        # ----------------------------------------------------------------------
-###        # Update the design based on the config
-###        # ----------------------------------------------------------------------
-###        if 'style' in config: 
-###            if 'backgroundColor' in config['style']:
-###                bar.update_layout(plot_bgcolor=config['style']['backgroundColor'])
-###                bar.update_layout(paper_bgcolor=config['style']['backgroundColor'])
-###            if 'color' in config['style']:
-###                bar.update_layout(font_color=config['style']['color'])
-###
-###        # ----------------------------------------------------------------------
-###        # Send back the chart
-###        # ----------------------------------------------------------------------
-###        return bar
-###
-###    # --------------------------------------------------------------------------
-###    # Finish (no call should reach this far, but just to be complete
-###    # --------------------------------------------------------------------------
-###    return False
-
-# ------------------------------------------------------------------------------
-# Get the existing marked-up data, no frills
-# ------------------------------------------------------------------------------
-def get_marked_data(data_fname):
-    # --------------------------------------------------------------------------
-    # Start
-    # --------------------------------------------------------------------------
-    print("...reading data from file " + data_fname + "...")
-
-    # --------------------------------------------------------------------------
-    # Get the whole mess at once
-    # --------------------------------------------------------------------------
-    existing_data = pd.read_excel(data_fname, sheet_name=None, usecols = lambda x: 'Unnamed' not in x,)
-
-    # --------------------------------------------------------------------------
-    # Set up the index for each
-    # --------------------------------------------------------------------------
-    existing_data['People']       = existing_data['People'].set_index('Name', drop=False).dropna(how='all')
-    existing_data['Instruments']  = existing_data['Instruments'].set_index('Name', drop=False).dropna(how='all')
-    existing_data['Genres']       = existing_data['Genres'].set_index('Name', drop=False).dropna(how='all')
-    existing_data['Bands']        = existing_data['Bands'].set_index('Name', drop=False).dropna(how='all')
-    existing_data['Albums']       = existing_data['Albums'].set_index(['Name','Band'], drop=False).dropna(how='all')
-    existing_data['Songs']        = existing_data['Songs'].set_index(['Name','Band'], drop=False).dropna(how='all')
-    existing_data['Places']       = existing_data['Places'].set_index('Name', drop=False).dropna(how='all')
-    existing_data['Series']       = existing_data['Series'].set_index('Name', drop=False).dropna(how='all')
-    existing_data['Gigs']         = existing_data['Gigs'].set_index(['Series','Series Index'], drop=False).dropna(how='all')
-    existing_data['Performances'] = existing_data['Performances'].set_index(['Series','Series Index','Set','Set Position'], drop=False).dropna(how='all')
-    existing_data['Image']        = existing_data['Image'].set_index('File Name', drop=False).dropna(how='all')
-    existing_data['Audio']        = existing_data['Audio'].set_index('File Name', drop=False).dropna(how='all')
-    existing_data['Video']        = existing_data['Video'].set_index('File Name', drop=False).dropna(how='all')
-
-    # --------------------------------------------------------------------------
-    # Finish
-    # --------------------------------------------------------------------------
-    return existing_data
