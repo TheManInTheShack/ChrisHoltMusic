@@ -36,6 +36,8 @@ def layout_shows(init_dict):
     # ==============================================================================================
     data_shows = get_data_shows(data)
 
+    data_songs_by_show = data_shows.sort_values(by='Series Index')
+
     # ==============================================================================================
     # Page Contents Configuration
     # ==============================================================================================
@@ -43,6 +45,12 @@ def layout_shows(init_dict):
     # Chart information
     # ------------------------------------------------------------------------------
     charts={}
+    charts['songs_by_show'] = {'chart_type':'bar', 
+                                       'idx':'chart_songs_by_show', 
+                                       'details':{'data':data_songs_by_show,
+                                                     'x':'Show Title',
+                                                     'y':['Count'], 
+                                                 'style':style_default}}
 
     # ------------------------------------------------------------------------------
     # Control information
@@ -53,7 +61,7 @@ def layout_shows(init_dict):
     # General layout information
     # ------------------------------------------------------------------------------
     layout={}
-    layout['chart_shape']     = "1x2"
+    layout['chart_shape']     = "1x1"
     layout['style_default']   = style_default
     layout['controls_orient'] = "top"
 
@@ -66,7 +74,7 @@ def layout_shows(init_dict):
     components = []
     components.append(get_navbar(pages, title))
     components.extend(display_data_table(data_shows, idx="shows_data_table", title="Data by Show"))
-    #components.append(charts_with_controls(charts, controls, layout))
+    components.append(charts_with_controls(charts, controls, layout))
     components.append(get_footnote(footnote))
 
     # ------------------------------------------------------------------------------
